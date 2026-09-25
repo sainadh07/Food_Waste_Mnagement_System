@@ -40,7 +40,7 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
 if __name__ == '__main__':
-    port = 8000
+    port = int(os.environ.get('PORT', 8000))
     httpd = ThreadingHTTPServer(('0.0.0.0', port), Handler)
     print(f'Serving FoodShare on http://localhost:{port}')
     httpd.serve_forever()

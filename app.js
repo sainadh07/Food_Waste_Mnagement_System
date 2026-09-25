@@ -108,7 +108,7 @@ const demoUsers = {
 
 function getCurrentUser() {
   try {
-    const raw = localStorage.getItem('foodshareUser');
+    const raw = sessionStorage.getItem('foodshareSessionUser') || localStorage.getItem('foodshareRememberedUser');
     const user = raw ? JSON.parse(raw) : null;
     const registeredDonor = getRegisteredDonor();
     return user?.role === 'donor' && registeredDonor ? { ...user, ...registeredDonor } : user;
@@ -118,9 +118,12 @@ function getCurrentUser() {
 }
 
 function setCurrentUser(user) {
-  localStorage.setItem('foodshareUser', JSON.stringify(user));
+  sessionStorage.setItem('foodshareSessionUser', JSON.stringify(user));
   if (user?.role === 'donor') localStorage.setItem('foodshareRegisteredDonor', JSON.stringify(user));
 }
+
+// Remove the old key, which kept users signed in after closing the application.
+localStorage.removeItem('foodshareUser');
 
 function getRegisteredAccounts() {
   try {
@@ -169,7 +172,8 @@ function saveDonorRecord(record) {
 }
 
 function logoutUser() {
-  localStorage.removeItem('foodshareUser');
+  sessionStorage.removeItem('foodshareSessionUser');
+  localStorage.removeItem('foodshareRememberedUser');
   navigateTo('/');
 }
 
@@ -441,7 +445,14 @@ function bindActions() {
           method: 'POST',
           body: JSON.stringify({ email, password: values.password, role })
         });
-        setCurrentUser(result.user);
+        const rememberMe = loginForm.querySelector('input[name="rememberMe"]')?.checked;
+        sessionStorage.removeItem('foodshareSessionUser');
+        localStorage.removeItem('foodshareRememberedUser');
+        if (rememberMe) {
+          localStorage.setItem('foodshareRememberedUser', JSON.stringify(result.user));
+        } else {
+          setCurrentUser(result.user);
+        }
         navigateTo(role === 'donor' ? '/donor/dashboard' : '/ngo/dashboard');
       } catch (error) {
         showAuthMessage(error.message);
@@ -469,7 +480,7 @@ function validateAuthCredentials(email, password) {
 }
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`http://localhost:5000${path}`, {
+  const response = await fetch(`http://127.0.0.1:5000${path}`, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options
   });
@@ -814,7 +825,7 @@ function loginPage(currentUser) {
           <div class="field-row"><label>Email<input type="email" name="email" placeholder="${role === 'ngo' ? 'ngo@foodshare.com' : role === 'admin' ? 'admin@foodshare.com' : 'donor@foodshare.com'}" required /></label></div>
           <div class="field-row"><label>Password<div class="password-field"><input id="login-password" type="password" name="password" placeholder="Enter your password" required /><button type="button" data-toggle-password="login-password" aria-label="Show password">Show</button></div></label></div>
           <div class="auth-requirements compact-requirements"><strong>Sign-in requirements</strong><label><input type="checkbox" disabled /> Gmail address ending with @gmail.com</label><label><input type="checkbox" disabled /> Password includes lowercase and uppercase letters</label></div>
-          <div class="field-row compact-row"><label class="checkbox-row"><input type="checkbox" />Remember Me</label><a href="/login">Forgot Password?</a></div>
+          <div class="field-row compact-row"><label class="checkbox-row"><input type="checkbox" name="rememberMe" />Remember Me</label><a href="/login">Forgot Password?</a></div>
           <button class="btn btn-primary full-width" type="submit">Sign In</button>
           <p class="auth-switch">Don’t have an account? <a href="/register">Register</a></p>
         </form>

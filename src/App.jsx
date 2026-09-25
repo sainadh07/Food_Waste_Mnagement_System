@@ -80,6 +80,16 @@ function storageKey() {
   return 'foodshare_current_user';
 }
 
+async function apiRequest(path, options = {}) {
+  fetch(`https://food-waste-mnagement-system-4.onrender.com${path}`, {
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    ...options,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
 function readStoredUser() {
   const data = localStorage.getItem(storageKey());
   if (!data) return null;
@@ -520,11 +530,36 @@ function ContactPage() {
 
 function RegisterPage() {
   const [selectedRole, setSelectedRole] = useState('donor');
+  const [errorMessage, setErrorMessage] = useState('');
   const navigate = useNavigate();
 
-  const handleRegistration = (event) => {
+  const handleRegistration = async (event) => {
     event.preventDefault();
-    navigate('/login');
+    setErrorMessage('');
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    if (values.password !== values.confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+    try {
+      await apiRequest('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          role: selectedRole,
+          name: values.name,
+          email: values.email,
+          password: values.password,
+          phone: values.phone,
+          donorType: values.donorType,
+          contactPerson: values.contactPerson,
+          address: values.address,
+          location: values.location,
+        }),
+      });
+      navigate('/login');
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
   };
 
   return (
@@ -545,27 +580,28 @@ function RegisterPage() {
         </div>
 
         <form onSubmit={handleRegistration} className="form-card inner-form">
+          {errorMessage && <p className="auth-form-message">{errorMessage}</p>}
           {selectedRole === 'donor' ? (
             <>
               <div className="field-row two-col">
                 <label>
                   Full Name
-                  <input type="text" placeholder="Your name" required />
+                  <input type="text" name="name" placeholder="Your name" required />
                 </label>
                 <label>
                   Email
-                  <input type="email" placeholder="you@example.com" required />
+                  <input type="email" name="email" placeholder="you@gmail.com" required />
                 </label>
               </div>
 
               <div className="field-row two-col">
                 <label>
                   Phone Number
-                  <input type="tel" placeholder="+1 555 000 0000" required />
+                  <input type="tel" name="phone" placeholder="+1 555 000 0000" required />
                 </label>
                 <label>
                   Donor Type
-                  <select defaultValue="Restaurant">
+                  <select name="donorType" defaultValue="Restaurant">
                     <option>Individual</option>
                     <option>Restaurant</option>
                     <option>Hotel</option>
@@ -580,11 +616,11 @@ function RegisterPage() {
               <div className="field-row two-col">
                 <label>
                   Password
-                  <input type="password" placeholder="Password" required />
+                  <input type="password" name="password" placeholder="Password" required />
                 </label>
                 <label>
                   Confirm Password
-                  <input type="password" placeholder="Confirm password" required />
+                  <input type="password" name="confirmPassword" placeholder="Confirm password" required />
                 </label>
               </div>
             </>
@@ -593,44 +629,44 @@ function RegisterPage() {
               <div className="field-row two-col">
                 <label>
                   NGO Name
-                  <input type="text" placeholder="Organization name" required />
+                  <input type="text" name="name" placeholder="Organization name" required />
                 </label>
                 <label>
                   Contact Person
-                  <input type="text" placeholder="Name" required />
+                  <input type="text" name="contactPerson" placeholder="Name" required />
                 </label>
               </div>
 
               <div className="field-row two-col">
                 <label>
                   Email
-                  <input type="email" placeholder="hello@ngo.org" required />
+                  <input type="email" name="email" placeholder="hello@gmail.com" required />
                 </label>
                 <label>
                   Phone Number
-                  <input type="tel" placeholder="+1 555 000 0000" required />
+                  <input type="tel" name="phone" placeholder="+1 555 000 0000" required />
                 </label>
               </div>
 
               <div className="field-row two-col">
                 <label>
                   Location
-                  <input type="text" placeholder="City or region" required />
+                  <input type="text" name="location" placeholder="City or region" required />
                 </label>
                 <label>
                   Address
-                  <input type="text" placeholder="Street address" required />
+                  <input type="text" name="address" placeholder="Street address" required />
                 </label>
               </div>
 
               <div className="field-row two-col">
                 <label>
                   Password
-                  <input type="password" placeholder="Password" required />
+                  <input type="password" name="password" placeholder="Password" required />
                 </label>
                 <label>
                   Confirm Password
-                  <input type="password" placeholder="Confirm password" required />
+                  <input type="password" name="confirmPassword" placeholder="Confirm password" required />
                 </label>
               </div>
             </>
@@ -651,34 +687,27 @@ function RegisterPage() {
 
 function LoginPage({ setCurrentUser }) {
   const [selectedRole, setSelectedRole] = useState('donor');
+  const [errorMessage, setErrorMessage] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = (event) => {
+  const handleLogin = async (event) => {
     event.preventDefault();
+    setErrorMessage('');
 
     const email = event.target.email.value.trim();
     const password = event.target.password.value.trim();
 
-    if (!email || !password) return;
-
-    const roleMap = {
-      donor: demoAccounts.donor,
-      ngo: demoAccounts.ngo,
-      admin: demoAccounts.admin,
-    };
-
-    const user = roleMap[selectedRole];
-    const userToStore = {
-      ...user,
-      email: email || user.email,
-    };
-
-    localStorage.setItem(storageKey(), JSON.stringify(userToStore));
-    setCurrentUser(userToStore);
-
-    if (selectedRole === 'donor') navigate('/donor/dashboard');
-    if (selectedRole === 'ngo') navigate('/ngo/dashboard');
-    if (selectedRole === 'admin') navigate('/admin/dashboard');
+    try {
+      const result = await apiRequest('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, role: selectedRole }),
+      });
+      localStorage.setItem(storageKey(), JSON.stringify(result.user));
+      setCurrentUser(result.user);
+      navigate(selectedRole === 'donor' ? '/donor/dashboard' : '/ngo/dashboard');
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
   };
 
   return (
@@ -702,6 +731,7 @@ function LoginPage({ setCurrentUser }) {
         </div>
 
         <form className="form-card inner-form" onSubmit={handleLogin}>
+          {errorMessage && <p className="auth-form-message">{errorMessage}</p>}
           <div className="field-row">
             <label>
               Email
